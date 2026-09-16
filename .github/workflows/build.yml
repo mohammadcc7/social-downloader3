@@ -29,12 +29,14 @@ jobs:
       run: |
         Invoke-WebRequest -Uri "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip" -OutFile "ffmpeg.zip"
         Expand-Archive -Path "ffmpeg.zip" -DestinationPath "ffmpeg_extracted"
-        $ffmpegBin = Get-ChildItem -Path "ffmpeg_extracted" -Filter "ffmpeg.exe" -Recurse | Select-Object -ExpandProperty DirectoryName
+        $ffmpegBin = (Get-ChildItem -Path "ffmpeg_extracted" -Filter "ffmpeg.exe" -Recurse).FullName
         echo "FFMPEG_PATH=$ffmpegBin" >> $env:GITHUB_ENV
 
     - name: Build with PyInstaller (Including FFmpeg)
+      shell: pwsh
       run: |
-        pyinstaller --noconsole --onefile --add-binary "${{ env.ENV.FFMPEG_PATH }}/ffmpeg.exe;." --name "SocialDownloader" main.py
+        $ffmpegPath = "${{ env.FFMPEG_PATH }}"
+        pyinstaller --noconsole --onefile --add-binary "$ffmpegPath;." --name "SocialDownloader" main.py
 
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
