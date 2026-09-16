@@ -1,9 +1,20 @@
 import os
+import sys
 import threading
 import tkinter as tk
 from tkinter import filedialog, messagebox
 from tkinter.ttk import Progressbar
 import yt_dlp
+
+
+# دالة لمعرفة مسار FFmpeg سواء كان البرنامج كود عادي أو ملف EXE مستقل
+res_path = ""
+if getattr(sys, 'frozen', False):
+  res_path = sys._MEIPASS
+else:
+  res_path = os.path.dirname(os.path.abspath(__file__))
+
+ffmpeg_path = os.path.join(res_path, 'ffmpeg.exe')
 
 
 class SocialDownloaderApp:
@@ -28,6 +39,9 @@ class SocialDownloaderApp:
     ).pack(anchor="w", padx=30)
     self.url_entry = tk.Entry(root, font=("Arial", 11), width=52)
     self.url_entry.pack(pady=5, padx=30)
+
+    # إضافة قائمة كليك يمين (نسخ، لصق، تحديد الكل) لحقل الإدخال
+    self.create_context_menu(self.url_entry)
 
     # اختيار نوع التحميل (فيديو أو صوت)
     tk.Label(
@@ -79,6 +93,36 @@ class SocialDownloaderApp:
     )
     self.status_label.pack(pady=5)
 
+  def create_context_menu(self, entry_widget):
+    """إنشاء قائمة كليك يمين لحقول الإدخال"""
+    menu = tk.Menu(entry_widget, tearoff=0)
+    menu.add_command(
+        label="قص",
+        command=lambda: entry_widget.event_generate("<<Cut>>"),
+    )
+    menu.add_command(
+        label="نسخ",
+        command=lambda: entry_widget.event_generate("<<Copy>>"),
+    )
+    menu.add_command(
+        label="لصق",
+        command=lambda: entry_widget.event_generate("<<Paste>>"),
+    )
+    menu.add_separator()
+    menu.add_command(
+        label="تحديد الكل",
+        command=lambda: entry_widget.select_range(0, tk.END),
+    )
+
+    def show_menu(event):
+      menu.tk_popup(event.x_root, event.y_root)
+
+    # ربط الأحداث بناءً على نظام التشغيل (زر الماوس الأيمن)
+    if sys.platform.startswith('darwin'):
+      entry_widget.bind("<Button-2>", show_menu)
+    else:
+      entry_widget.bind("<Button-3>", show_menu)
+
   def start_download_thread(self):
     url = self.url_entry.get().strip()
     if not url:
@@ -124,23 +168,23 @@ class SocialDownloaderApp:
     choice = self.download_type.get()
 
     try:
+      ydl_opts = {
+          'outtmpl': os.path.join(download_folder, '%(title)s.%(ext)s'),
+          'progress_hooks': [self.progress_hook],
+      }
+
+      if os.path.exists(ffmpeg_path):
+        ydl_opts['ffmpeg_location'] = ffmpeg_path
+
       if choice == "video":
-        ydl_opts = {
-            'outtmpl': os.path.join(download_folder, '%(title)s.%(ext)s'),
-            'format': 'bestvideo+bestaudio/best',
-            'progress_hooks': [self.progress_hook],
-        }
+        ydl_opts['format'] = 'bestvideo+bestaudio/best'
       else:
-        ydl_opts = {
-            'outtmpl': os.path.join(download_folder, '%(title)s.%(ext)s'),
-            'format': 'bestaudio/best',
-            'postprocessors': [{
-                'key': 'FFmpegExtractAudio',
-                'preferredcodec': 'mp3',
-                'preferredquality': '192',
-            }],
-            'progress_hooks': [self.progress_hook],
-        }
+        ydl_opts['format'] = 'bestaudio/best'
+        ydl_opts['postprocessors'] = [{
+            'key': 'FFmpegExtractAudio',
+            'preferredcodec': 'mp3',
+            'preferredquality': '192',
+        }]
 
       with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         ydl.download([url])
@@ -163,7 +207,7 @@ class SocialDownloaderApp:
           ),
       )
       self.root.after(
-          0, lambda: self.status_label.config(text="فشل التحميل", fg="red")
+          0, lambda: self.status_label.status_label.config(text="فشل التحميل", fg="red") if hasattr(self.status_label, 'status_label') else self.status_label.config(text="فشل التحميل", fg="red")
       )
 
     finally:
